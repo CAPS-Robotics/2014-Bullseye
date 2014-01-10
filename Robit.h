@@ -2,13 +2,17 @@
 * @file Robit.h
 * Header file for the myRobit class and its thread functions
 *************************************************************************************/
+#ifndef _ROBIT_H
+#define _ROBIT_H
 
 /*************************************************************************************
 * Includes
 *************************************************************************************/
 #include "WPILib.h"
 
+#include "fcntl.h"
 #include "pthread.h"
+#include "semaphore.h"
 
 /*************************************************************************************
 * Defines
@@ -52,8 +56,25 @@ public:
 };
 
 /*************************************************************************************
+* Global variables
+*************************************************************************************/
+sem_t *                     shooter_semaphore;
+                                            /**< Shot synchro semaphore             */
+pthread_t                   driveThread;    /**< Drive thread object                */
+pthread_t                   inputThread;    /**< Input thread object                */
+pthread_t                   shooterThread;  /**< Shooter thread object              */
+
+Compressor *                compressor;     /**< Compressor for pneumatics          */
+RobotDrive *                drivetrain;     /**< Drivetrain - Mecanum               */
+Joystick *                  joystick;       /**< Joystick for input                 */
+Talon *                     shooter_motor;  /**< CIM for shooting                   */
+DoubleSolenoid *            shooter_piston; /**< Piston for firing discs            */
+
+/*************************************************************************************
 * Actuator thread functions
 *************************************************************************************/
 void * driveFunc( void * );                 /**< Drive thread function              */
 void * inputFunc( void * );                 /**< Input thread function              */
 void * shooterFunc( void * );               /**< Shooter thread function            */
+
+#endif
