@@ -58,11 +58,8 @@ public:
 /*************************************************************************************
 * Global variables
 *************************************************************************************/
-sem_t *                     shooter_semaphore;
-                                            /**< Shot synchro semaphore             */
 pthread_t                   driveThread;    /**< Drive thread object                */
 pthread_t                   inputThread;    /**< Input thread object                */
-pthread_t                   shooterThread;  /**< Shooter thread object              */
 
 Compressor *                compressor;     /**< Compressor for pneumatics          */
 RobotDrive *                drivetrain;     /**< Drivetrain - Mecanum               */
@@ -75,6 +72,5 @@ DoubleSolenoid *            shooter_piston; /**< Piston for firing discs        
 *************************************************************************************/
 void * driveFunc( void * );                 /**< Drive thread function              */
 void * inputFunc( void * );                 /**< Input thread function              */
-void * shooterFunc( void * );               /**< Shooter thread function            */
 
 #endif

@@ -13,10 +13,7 @@
 *
 * Sets up the shooter's semaphore
 *************************************************************************************/
-myRobit::myRobit(){
-    // Set up the shooter's semaphore
-    shooter_semaphore = sem_open( "SHOOTER", O_CREAT, 0644, 0 );
-}
+myRobit::myRobit(){}
 
 /*************************************************************************************
 * myRobit class destructor
@@ -55,8 +52,7 @@ void myRobit::RobotInit(){
 
     // Start all the threads
     pthread_create( &driveThread, NULL, driveFunc, NULL );
-    pthread_create( &inputThread, NULL, inputFunc, NULL );
-    pthread_create( &shooterThread, NULL, shooterFunc, NULL );
+    // pthread_create( &inputThread, NULL, inputFunc, NULL );    // Not needed for now on the kitbot.
 }
 
 /*********************************************************************************//**
@@ -81,11 +77,23 @@ void myRobit::AutonomousInit(){
 void * driveFunc( void * arg ){
 
     while ( 1 ){
-        // Do dat drive thang
-        drivetrain->MecanumDrive_Cartesian(
-            joystick->GetX( ),
-            joystick->GetY( ),
-            joystick->GetZ( ) );
+        // Get the input values
+        float tL = ( fabs( stick.GetRawAxis( 2 ) ) > .2 ) ? stick.GetRawAxis( 2 ) : 0.0;
+        float tR = ( fabs( stick.GetRawAxis( 4 ) ) > .2 ) ? stick.GetRawAxis( 4 ) : 0.0;
+
+        // Reduce power when turning
+        float turnReduc = ( fabs( tL - tR ) / 8.0 );
+        tL -= tL * turnReduc;
+        tR -= tR * turnReduc;
+
+        // Compensation for drivetrain un-even-ness
+        tR -= tR * fabs( tL * 0.09 );
+
+        smooth(
+            &left,
+            &right,
+            tL,
+            tR );
     }
 }
 
@@ -106,59 +114,34 @@ void * inputFunc( void * arg ){
 }
 
 /*********************************************************************************//**
-* Shooter thread function
+* Smooth helper function
 *
-* Waits on the shooter's semaphore, then fires
+* Takes the outputs to the motors, and smooths them up to the desired value, based
+* on time taken since the last loop
 *************************************************************************************/
-void * shooterFunc( void * arg ){
-    int                     val;            /* Used for checking semaphore value    */
-    int                     sem_retval;     /* Used for checking semaphore wait     */
+void smooth( Talon * lTalon, Talon * rTalon, float lVal, float rVal ){
+    static double prevTime = GetTime( );    /* Persistant previous time             */
+    static float currL, currR;              /* Persistant current motor speeds      */
 
-    while( 1 ){
-        // Try to wait for the semaphore
-        sem_retval = sem_trywait( shooter_semaphore );
+    // Get the time at this loop
+    double nowTime = GetTime( );
 
-        // If we got the semaphore lock
-        if( sem_retval == 0 ){
-            // Start the shooter motor
-            shooter_motor->Set( 1.0 );
-            Wait( 2.75 );
-    
-            // Pulse the firing piston
-            shooter_piston->Set( shooter_piston->kForward );
-            Wait( .75 );
-            shooter_piston->Set( shooter_piston->kReverse );
-    
-            // Only stop the motor if we aren't firing again
-            sem_getvalue( shooter_semaphore, &val );
-            if( !val ){
-                shooter_motor->Set( 0.0 );
-            }
-            
-        } else {
-            // If manual mode button is held
-            if( joystick->GetRawButton( BTN_LBM ) ){
-                // If the motor trigger held
-                if( joystick->GetRawButton( BTN_LTG ) ){
-                    // Turn motor on
-                    shooter_motor->Set( 1.0 );
-                } else {
-                    // Keep motor off
-                    shooter_motor->Set( 0.0 );
-                }
-                
-                // If the piston trigger held
-                if(joystick->GetRawButton( BTN_RTG ) ){
-                    // Extend the piston
-                    shooter_piston->Set( shooter_piston->kForward );
-                } else {
-                    // Retract the piston
-                    shooter_piston->Set( shooter_piston->kReverse );
-                }
-            }
-        }
-    }
+    // Calculate maximum acceleration for this tick
+    // PS -> WTF does that magic number stand for? No idea!!
+    //   Make it smaller, it accelerates really slowly
+    //   Any larger, and smoothing is not doing much at all
+    float accelMax = ( nowTime - prevTime ) * 38.334;
+
+    // If we want to accelerate faster than allowed, don't
+    // Also handle the + and - cases
+    // Because failure to do so means it never stops accelerating.....
+    //   I may have dented the wall figuring that out...
+    currL = ( fabs( lVal - currL ) > accelMax ) ? ( ( lVal < currL ) ? currL - accelMax : currL + accelMax ) : lVal;
+    currR = ( fabs( rVal - currR ) > accelMax ) ? ( ( rVal < currR ) ? currR - accelMax : currR + accelMax ) : rVal;
+
+    // Now set the motors for tank drive
+    lTalon->Set( currL );
+    rTalon->Set( currX );
 }
-
 // Cruddy FIRST start macro function
 START_ROBOT_CLASS( myRobit );
