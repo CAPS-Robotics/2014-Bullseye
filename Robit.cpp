@@ -3,22 +3,36 @@
 * Source file for the myRobit class and its thread functions
 *************************************************************************************/
 
+
+/*************************************************************************************
+* TODO:
+* 
+* Adjustable desVoltage
+* Winch release
+*************************************************************************************/
+
+
 /*************************************************************************************
 * Includes
 *************************************************************************************/
 #include "Robit.h"
+
+/*************************************************************************************
+* Global variable definitions
+*************************************************************************************/
+float                desVoltage = 2.5;      /**< Desired voltage on load cell       */
 
 /*********************************************************************************//**
 * myRobit class constructor
 *
 * Sets up the shooter's semaphore
 *************************************************************************************/
-myRobit::myRobit(){}
+myRobit::myRobit(){};
 
 /*************************************************************************************
 * myRobit class destructor
 *************************************************************************************/
-myRobit::~myRobit(){}
+myRobit::~myRobit(){};
 
 /*************************************************************************************
 Unused class functions
@@ -39,12 +53,14 @@ void myRobit::TestPeriodic(){};
 * spawns all the worker threads.
 *************************************************************************************/
 void myRobit::RobotInit(){
+    // Set up the drive talons
+    lDriveTalon =           new Talon( L_DRIVE_PORT );
+    rDriveTalon =           new Talon( R_DRIVE_PORT );
+
     // Set up the control objects
-    compressor =            new Compressor( PRESSURE_SWITCH, COMPRESSOR_PORT );
-    drivetrain =            new RobotDrive( FRONT_LEFT_MOTOR, BACK_LEFT_MOTOR, FRONT_RIGHT_MOTOR, BACK_RIGHT_MOTOR );
+    ACDC =                  new AnalogChannel( LOADCELL_CHANNEL );
+    filthyWench =           new Talon( WINCH_PORT );
     joystick =              new Joystick( JOYSTICK_PORT );
-    shooter_motor =         new Talon( TALON_PORT );
-    shooter_piston =        new DoubleSolenoid( SHOOTER_PISTON_FORE, SHOOTER_PISTON_BACK );
 
     // Set all starting values for objects
     compressor->Start();
@@ -52,21 +68,17 @@ void myRobit::RobotInit(){
 
     // Start all the threads
     pthread_create( &driveThread, NULL, driveFunc, NULL );
-    // pthread_create( &inputThread, NULL, inputFunc, NULL );    // Not needed for now on the kitbot.
+    pthread_create( &inputThread, NULL, inputFunc, NULL );
+    pthread_create( &winchThread, NULL, winchFunc, NULL );
 }
 
 /*********************************************************************************//**
 * Autonomous init function
 *
-* Runs once at start of autonomous period. Will simply shoot four times.
+* Runs once at start of autonomous period.
 *************************************************************************************/
 void myRobit::AutonomousInit(){
-    int                     i;              /* Counter variable                     */
-
-    // Fire four times
-    for( i = 0; i < 4; ++i ){
-        sem_post( shooter_semaphore );
-    }
+    // Nada por ahora
 }
 
 /*********************************************************************************//**
@@ -78,20 +90,20 @@ void * driveFunc( void * arg ){
 
     while ( 1 ){
         // Get the input values
-        float tL = ( fabs( stick.GetRawAxis( 2 ) ) > .2 ) ? stick.GetRawAxis( 2 ) : 0.0;
-        float tR = ( fabs( stick.GetRawAxis( 4 ) ) > .2 ) ? stick.GetRawAxis( 4 ) : 0.0;
+        float tL = ( fabs( stick.GetRawAxis( 2 ) ) > DEAD_ZONE ) ? stick.GetRawAxis( 2 ) : 0.0;
+        float tR = ( fabs( stick.GetRawAxis( 4 ) ) > DEAD_ZONE ) ? stick.GetRawAxis( 4 ) : 0.0;
 
         // Reduce power when turning
-        float turnReduc = ( fabs( tL - tR ) / 8.0 );
+        float turnReduc = ( fabs( tL - tR ) / TURN_REDUC_FACTOR );
         tL -= tL * turnReduc;
         tR -= tR * turnReduc;
 
         // Compensation for drivetrain un-even-ness
-        tR -= tR * fabs( tL * 0.09 );
+        tR -= tR * fabs( tL * UNEVEN_ADJ_FACTOR );
 
         smooth(
-            &left,
-            &right,
+            lDriveTalon,
+            rDriveTalon,
             tL,
             tR );
     }
@@ -100,15 +112,28 @@ void * driveFunc( void * arg ){
 /*********************************************************************************//**
 * Input thread function
 *
-* If the shoot button is pushed, post to the shooters semaphore
+* N/A for now
 *************************************************************************************/
 void * inputFunc( void * arg ){
 
     while ( 1 ){
-        // Post the semaphore if button push, debounce for 200 ms
-        if( joystick->GetRawButton( BTN_X ) ){
-            sem_post( shooter_semaphore );
-            Wait( .2 );
+        // Do nothing for now
+    }
+}
+
+/*********************************************************************************//**
+* Winch thread function
+*
+* If button is pushed, wind the winch
+*************************************************************************************/
+void * winchFunc( void * arg ){
+
+    while ( 1 ) {
+        if ( joystick->GetRawButton( BTN_LBM ) ) {
+            // Turn motor on till we are at tension
+            filthyWench->Set( 1.0 );
+            while ( ACDC->GetVoltage() < desVoltage );
+            filthyWench->Set( 0.0 );
         }
     }
 }
