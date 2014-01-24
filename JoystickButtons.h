@@ -2,8 +2,8 @@
 * @file Robit.h
 * Header file for the myRobit class and its thread functions
 *************************************************************************************/
-#ifndef _ROBIT_H
-#define _ROBIT_H
+#ifndef _JOYSTICK_BUTT_H
+#define _JOYSTICK_BUTT_H
 
 /*************************************************************************************
 * Defines
@@ -32,7 +32,7 @@
 #define JOY_AXIS_LY         2
 #define JOY_AXIS_RX         3
 #define JOY_AXIS_RY         4
-#define JOY_AXIS_DX         4
-#define JOY_AXIS_DY         4
+#define JOY_AXIS_DX         5
+#define JOY_AXIS_DY         6
 
 #endif

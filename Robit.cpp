@@ -3,14 +3,11 @@
 * Source file for the myRobit class and its thread functions
 *************************************************************************************/
 
-
 /*************************************************************************************
 * TODO:
-* 
+*
 * Adjustable desVoltage
-* Winch release
 *************************************************************************************/
-
 
 /*************************************************************************************
 * Includes
@@ -20,12 +17,10 @@
 /*************************************************************************************
 * Global variable definitions
 *************************************************************************************/
-float                desVoltage = 2.5;      /**< Desired voltage on load cell       */
+float                desVoltage = 1.2;      /**< Desired voltage on load cell       */
 
 /*********************************************************************************//**
 * myRobit class constructor
-*
-* Sets up the shooter's semaphore
 *************************************************************************************/
 myRobit::myRobit(){};
 
@@ -53,18 +48,22 @@ void myRobit::TestPeriodic(){};
 * spawns all the worker threads.
 *************************************************************************************/
 void myRobit::RobotInit(){
-    // Set up the drive talons
-    lDriveTalon =           new Talon( L_DRIVE_PORT );
-    rDriveTalon =           new Talon( R_DRIVE_PORT );
+    // Set up the drive object
+    rDrive =                new RobotDrive( LF_DRIVE_PORT, LR_DRIVE_PORT, RF_DRIVE_PORT, RR_DRIVE_PORT );
 
     // Set up the control objects
     ACDC =                  new AnalogChannel( LOADCELL_CHANNEL );
+    aqDeploy =              new DoubleSolenoid( BALLAQ_DEPLOY, BALLAQ_UNDEPLOY );
+    compressor =            new Compressor( PRESSURE_SWITCH, COMPRESSOR_PORT );
     filthyWench =           new Talon( WINCH_PORT );
-    joystick =              new Joystick( JOYSTICK_PORT );
+    joystick =              new Joystick( JOY_PORT_1 );
+    winchRelease =          new Solenoid( WINCH_RELEASE_PORT );
+    windInBall =            new Talon( BALLAQ_WINDIN );
 
     // Set all starting values for objects
-    compressor->Start();
-    shooter_piston->Set( shooter_piston->kReverse );
+    aqDeploy->Set( aqDeploy::kReverse );
+    compressor->Start( );
+    winchRelease->Set( false );
 
     // Start all the threads
     pthread_create( &driveThread, NULL, driveFunc, NULL );
@@ -90,83 +89,88 @@ void * driveFunc( void * arg ){
 
     while ( 1 ){
         // Get the input values
-        float tL = ( fabs( stick.GetRawAxis( 2 ) ) > DEAD_ZONE ) ? stick.GetRawAxis( 2 ) : 0.0;
-        float tR = ( fabs( stick.GetRawAxis( 4 ) ) > DEAD_ZONE ) ? stick.GetRawAxis( 4 ) : 0.0;
+        float tX = ( fabs( joystick->GetRawAxis( JOY_AXIS_LX ) ) > DEAD_ZONE ) ? joystick->GetRawAxis( JOY_AXIS_LX ) : 0.0;
+        float tY = ( fabs( joystick->GetRawAxis( JOY_AXIS_LY ) ) > DEAD_ZONE ) ? joystick->GetRawAxis( JOY_AXIS_LY ) : 0.0;
+        float tZ = joystick->GetRawAxis( JOY_AXIS_RX ) * joystick->GetRawAxis( JOY_AXIS_RX ) * joystick->GetRawAxis( JOY_AXIS_RX );
 
-        // Reduce power when turning
-        float turnReduc = ( fabs( tL - tR ) / TURN_REDUC_FACTOR );
-        tL -= tL * turnReduc;
-        tR -= tR * turnReduc;
+        // Static starting time, updated each tick
+        static double ctime = GetTime();
+        // Time at current tick
+        double ntime = GetTime();
 
-        // Compensation for drivetrain un-even-ness
-        tR -= tR * fabs( tL * UNEVEN_ADJ_FACTOR );
+        // Max allowable acceleration
+        float accelFact = (ntime - ctime) * 30.334;
+        // Current output values
+        static float cX, cY, cZ;
 
-        smooth(
-            lDriveTalon,
-            rDriveTalon,
-            tL,
-            tR );
+        // If change greater than max allowed, only increment, else just set
+        if(fabs(cX - tX) > accelFact){cX += (tX < cX)?-accelFact:accelFact;} else {cX = tX;}
+        if(fabs(cY - tY) > accelFact){cY += (tY < cY)?-accelFact:accelFact;} else {cY = tY;}
+        if(fabs(cZ - tZ) > accelFact){cZ += (tZ < cZ)?-accelFact:accelFact;} else {cZ = tZ;}
+
+        // Update current time
+        ctime = GetTime();
+
+        // Actually doo dat drive thang
+        rDrive->MecanumDrive_Cartesian(cX, cY, cZ);
     }
 }
 
 /*********************************************************************************//**
 * Input thread function
 *
-* N/A for now
+* Handle all of the input, as well as the ball acquisition system
 *************************************************************************************/
 void * inputFunc( void * arg ){
 
     while ( 1 ){
-        // Do nothing for now
+        // Deploy / Undeploy on buttons
+        // Run motors if deployed, and button
+        if( joystick->GetRawButton( JOY_BTN_RBM ) )
+            aqDeploy->Set( aqDeploy::kForward );
+        else if( joystick->GetRawButton( JOY_BTN_LBM ) )
+            aqDeploy->Set( aqDeploy::kReverse );
+
+        if( joystick->GetRawButton( JOY_BTN_LTG ) )
+            windInBall->Set( 1.0 );
+        else
+            windInBall->Set( 0.0 );
+
+        // Edit desvoltage if buttons
+        if( joystick->GetRawAxis( JOY_AXIS_DY ) > .5 ){
+            desVoltage += .1;
+            Wait( .1 );
+        } else if( joystick->GetRawAxis( JOY_AXIS_DY ) < -.5 ){
+            desVoltage -= .1;
+            Wait( .1 );
+        }
     }
 }
 
 /*********************************************************************************//**
 * Winch thread function
 *
-* If button is pushed, wind the winch
+* Wind the winch, and fire on command
+*
+* TODO: Do this with a semaphore... waitlock instead of the while, and move that to input thread
 *************************************************************************************/
 void * winchFunc( void * arg ){
 
     while ( 1 ) {
-        if ( joystick->GetRawButton( BTN_LBM ) ) {
-            // Turn motor on till we are at tension
-            filthyWench->Set( 1.0 );
-            while ( ACDC->GetVoltage() < desVoltage );
-            filthyWench->Set( 0.0 );
-        }
+
+        // Turn motor on till we are at tension
+        filthyWench->Set( 1.0 );
+        while ( ACDC->GetVoltage() < desVoltage );
+        filthyWench->Set( 0.0 );
+
+        while ( ! joystick->GetRawButton( JOY_BTN_RTG ) );
+
+        // Fire piston
+        winchRelease->Set( true );
+        Wait( 2.5 );
+        winchRelease->Set( false );
     }
 }
 
-/*********************************************************************************//**
-* Smooth helper function
-*
-* Takes the outputs to the motors, and smooths them up to the desired value, based
-* on time taken since the last loop
-*************************************************************************************/
-void smooth( Talon * lTalon, Talon * rTalon, float lVal, float rVal ){
-    static double prevTime = GetTime( );    /* Persistant previous time             */
-    static float currL, currR;              /* Persistant current motor speeds      */
-
-    // Get the time at this loop
-    double nowTime = GetTime( );
-
-    // Calculate maximum acceleration for this tick
-    // PS -> WTF does that magic number stand for? No idea!!
-    //   Make it smaller, it accelerates really slowly
-    //   Any larger, and smoothing is not doing much at all
-    float accelMax = ( nowTime - prevTime ) * 38.334;
-
-    // If we want to accelerate faster than allowed, don't
-    // Also handle the + and - cases
-    // Because failure to do so means it never stops accelerating.....
-    //   I may have dented the wall figuring that out...
-    currL = ( fabs( lVal - currL ) > accelMax ) ? ( ( lVal < currL ) ? currL - accelMax : currL + accelMax ) : lVal;
-    currR = ( fabs( rVal - currR ) > accelMax ) ? ( ( rVal < currR ) ? currR - accelMax : currR + accelMax ) : rVal;
-
-    // Now set the motors for tank drive
-    lTalon->Set( currL );
-    rTalon->Set( currX );
-}
 // Cruddy FIRST start macro function
 START_ROBOT_CLASS( myRobit );
