@@ -35,11 +35,16 @@
 #define LOADCELL_CHANNEL    1               /**< Loadcell analog channel            */
 #define WINCH_PORT          5               /**< Winch talon                        */
 #define WINCH_RELEASE_PORT  1               /**< Piston that quickreleases the winch */
+#define WINCH_RELEASE_OTHER 4               /**< Other port for the piston          */
+#define WINCH_HARDSTOP      2               /**< Digital input for the winch limit switch */
 
 // Ball aq gizmos
 #define BALLAQ_DEPLOY       2               /**< Piston port to extend the ball aq  */
 #define BALLAQ_UNDEPLOY     3               /**< Piston port to retract the ball aq */
 #define BALLAQ_WINDIN       6               /**< Talon to wind balls into the shooter */
+
+// Defense gadgets
+#define DEFENSE_MOTOR       7               /**< Talon to wind up and down the pole */
 
 /*********************************************************************************//**
 * Main robot class
@@ -51,9 +56,9 @@ public:
 
     void RobotInit();                       /**< Robot init function                */
     void AutonomousInit();                  /**< Autonomous init function           */
+    void DisabledInit();                    /**< Disabled init function             */
+    void TeleopInit();                      /**< Teleop init function               */
 
-    void DisabledInit();
-    void TeleopInit();
     void TestInit();
 
     void DisabledPeriodic();
@@ -75,8 +80,11 @@ AnalogChannel *             ACDC;           /**< Load sensor analong input      
 DoubleSolenoid *            aqDeploy;       /**< Deploy / Undeploy ball aq          */
 Compressor *                compressor;     /**< Compressor for pneumatics          */
 Talon *                     filthyWench;    /**< Winch Talon                        */
+DigitalInput *              hardstop;       /**< Winch hardstop limit switch        */
 Joystick *                  joystick;       /**< Joystick for input                 */
-Solenoid *                  winchRelease;   /**< Release piston for the winch       */
+DriverStationLCD *          lcd;            /**< LCD display on the DS              */
+Talon *                     poleRaiser;     /**< Raises and lowers the defense pole */
+DoubleSolenoid *            winchRelease;   /**< Release piston for the winch       */
 Talon *                     windInBall;     /**< Talon on the ball aq system        */
 
 extern float                desVoltage;     /**< Desired voltage on load cell       */

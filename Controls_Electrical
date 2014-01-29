@@ -1,0 +1,41 @@
+// Talons
+LF_DRIVE_PORT       1               /**< Left F drive Talon                 */
+RF_DRIVE_PORT       2               /**< Right F drive Talon                */
+LR_DRIVE_PORT       3               /**< Left R drive Talon                 */
+RR_DRIVE_PORT       4               /**< Right R drive Talon                */
+WINCH_PORT          5               /**< Winch talon                        */
+BALLAQ_WINDIN       6               /**< Talon to wind balls into the shooter */
+DEFENSE_MOTOR       7               /**< Talon to wind up and down the pole */
+
+// Relays
+COMPRESSOR_PORT     1               /**< Compressor relay port              */
+
+// DIO
+PRESSURE_SWITCH     1               /**< Pressure switch DIO port           */
+WINCH_HARDSTOP      2               /**< Digital input for the winch limit switch */
+
+// Analog
+LOADCELL_CHANNEL    1               /**< Loadcell analog channel            */
+
+// Pneumatics
+WINCH_RELEASE_PORT  1               /**< Piston that quickreleases the winch */
+BALLAQ_DEPLOY       2               /**< Piston port to extend the ball aq  */
+BALLAQ_UNDEPLOY     3               /**< Piston port to retract the ball aq */
+
+
+// CONTROLS:
+LX -> Mecanum Strafe
+LY -> Mecanum F/R
+RX -> Mecanum Rotate
+
+A -> Defense down
+Y -> Defense up
+
+Right bumper -> Deploy ball aq
+Left bumper -> Retract ball aq
+
+Left trigger -> Wind ball aq
+Right trigger -> Fire the shooter
+
+D-pad up -> Adjust desired voltage up
+D-pad down -> Adjust desired voltage down
