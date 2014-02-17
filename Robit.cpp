@@ -76,6 +76,16 @@ void myRobit::RobotInit(){
 * Runs once at start of autonomous period.
 *************************************************************************************/
 void myRobit::AutonomousInit(){
+    poleRaiser->Set( 1.f );
+    rDrive->MecanumDriveCartesian( 0.f, 0.8f, 0.f);
+    
+    // TODO: make a config variable
+    Wait( 1.5f );
+
+    rDrive->MecanumDriveCartesian( 0.f, 0.f, 0.f );
+
+    /*
+     * offensive
     rDrive->MecanumDriveCartesian( 0.f, 0.8f, 0.f );
     Wait( 1.f );
     rDrive->MecanumDriveCartesian( 0.f, 0.f, 0.f );
@@ -85,6 +95,7 @@ void myRobit::AutonomousInit(){
     Wait( 2.5 );
     //This resets the batman, but we don't want it for fear of robocop
     //winchRelease->Set( DoubleSolenoid::kReverse );
+    */
 }
 
 /*********************************************************************************//**
