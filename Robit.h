@@ -33,14 +33,17 @@
 
 // Winch stuffs
 #define LOADCELL_CHANNEL    1               /**< Loadcell analog channel            */
+#define RANGE_SENSOR        2               /**< Range sensor analog channel        */
+#define SWITCH_PORT         6               /**< Limit Switch digital port          */
 #define WINCH_PORT          5               /**< Winch talon                        */
 #define WINCH_RELEASE_PORT  1               /**< Piston that quickreleases the winch */
-#define WINCH_RELEASE_OTHER 4               /**< Other port for the piston          */
-#define WINCH_HARDSTOP      2               /**< Digital input for the winch limit switch */
+#define WINCH_RELEASE_OTHER 2               /**< Other port for the piston          */
 
 // Ball aq gizmos
-#define BALLAQ_DEPLOY       2               /**< Piston port to extend the ball aq  */
-#define BALLAQ_UNDEPLOY     3               /**< Piston port to retract the ball aq */
+#define BALLAQ_DEPLOY       3               /**< Piston port to extend the ball aq  */
+#define BALLAQ_UNDEPLOY     4               /**< Piston port to retract the ball aq */
+#define BALLAQ2_DEPLOY      5               /**< Piston port to extend the ball aq  */
+#define BALLAQ2_UNDEPLOY    6               /**< Piston port to retract the ball aq */
 #define BALLAQ_WINDIN       6               /**< Talon to wind balls into the shooter */
 
 // Defense gadgets
@@ -78,12 +81,14 @@ RobotDrive *                rDrive;         /**< Robot drive object             
 
 AnalogChannel *             ACDC;           /**< Load sensor analong input          */
 DoubleSolenoid *            aqDeploy;       /**< Deploy / Undeploy ball aq          */
+DoubleSolenoid *            aqDeploy2;      /**< Deploy / Undeploy ball aq          */
 Compressor *                compressor;     /**< Compressor for pneumatics          */
 Talon *                     filthyWench;    /**< Winch Talon                        */
-DigitalInput *              hardstop;       /**< Winch hardstop limit switch        */
 Joystick *                  joystick;       /**< Joystick for input                 */
 DriverStationLCD *          lcd;            /**< LCD display on the DS              */
+DigitalInput *              limitSwitch;    /**< Hard stop for catapult             */
 Talon *                     poleRaiser;     /**< Raises and lowers the defense pole */
+AnalogChannel *             rangeFinder;    /**< Gets range in front of bot         */
 DoubleSolenoid *            winchRelease;   /**< Release piston for the winch       */
 Talon *                     windInBall;     /**< Talon on the ball aq system        */
 
