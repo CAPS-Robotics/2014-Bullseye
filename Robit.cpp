@@ -75,7 +75,7 @@ void myRobit::RobotInit(){
 * Runs once at start of autonomous period.
 *************************************************************************************/
 void myRobit::AutonomousInit(){
-    // Nada ahora
+    // Nada ahora.
 }
 
 /*********************************************************************************//**
