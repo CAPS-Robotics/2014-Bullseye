@@ -11,7 +11,7 @@
 /*************************************************************************************
 * Global variable definitions
 *************************************************************************************/
-float                desVoltage = 1.8;      /**< Desired voltage on load cell       */
+float                desVoltage = 290;      /**< Desired voltage on load cell       */
 
 /*********************************************************************************//**
 * myRobit class constructor
@@ -46,18 +46,21 @@ void myRobit::RobotInit(){
     // Set up the control objects
     ACDC =                  new AnalogChannel( LOADCELL_CHANNEL );
     aqDeploy =              new DoubleSolenoid( BALLAQ_DEPLOY, BALLAQ_UNDEPLOY );
+    aqDeploy2 =             new DoubleSolenoid( BALLAQ2_DEPLOY, BALLAQ2_UNDEPLOY );
     compressor =            new Compressor( PRESSURE_SWITCH, COMPRESSOR_PORT );
     filthyWench =           new Talon( WINCH_PORT );
-    hardstop =              new DigitalInput( WINCH_HARDSTOP );
     joystick =              new Joystick( JOY_PORT_1 );
     lcd =                   DriverStationLCD::GetInstance( );
+    limitSwitch =           new DigitalInput( SWITCH_PORT );
     poleRaiser =            new Talon( DEFENSE_MOTOR );
+    rangeFinder =           new AnalogChannel( RANGE_SENSOR );
     winchRelease =          new DoubleSolenoid( WINCH_RELEASE_PORT, WINCH_RELEASE_OTHER );
     windInBall =            new Talon( BALLAQ_WINDIN );
 
     // Set all starting values for objects
     aqDeploy->Set( DoubleSolenoid::kReverse );
-    lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.1f", desVoltage );
+    aqDeploy2->Set( DoubleSolenoid::kReverse );
+    lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.0f", desVoltage );
     winchRelease->Set( DoubleSolenoid::kReverse );
 
     // Start all the threads
@@ -81,9 +84,6 @@ void myRobit::AutonomousInit(){
 * Runs once at start of teleop period.
 *************************************************************************************/
 void myRobit::TeleopInit(){
-    // Deploy the ball aq thing
-    aqDeploy->Set( DoubleSolenoid::kForward );
-
     // Start the compressor
     compressor->Start( );
 }
@@ -94,9 +94,6 @@ void myRobit::TeleopInit(){
 * Runs once at start of disabled period.
 *************************************************************************************/
 void myRobit::DisabledInit(){
-    // Retract the ball aq thing
-    aqDeploy->Set( DoubleSolenoid::kReverse );
-
     // Stop the compressor
     compressor->Stop( );
 }
@@ -134,6 +131,8 @@ void * driveFunc( void * arg ){
 
         // Actually doo dat drive thang
         rDrive->MecanumDrive_Cartesian(cX, cY, cZ);
+
+        Wait( .01 );
     }
 }
 
@@ -148,27 +147,39 @@ void * inputFunc( void * arg ){
         // Run motors if button
         if( joystick->GetRawButton( JOY_BTN_LTG ) )
             windInBall->Set( 1.0 );
+        else if( joystick->GetRawButton( JOY_BTN_LBM ) )
+            windInBall->Set( -1.0 );
         else if( windInBall->Get( ) != 0.0 )
             windInBall->Set( 0.0 );
 
         // Edit desvoltage if buttons
-        if( joystick->GetRawAxis( JOY_AXIS_DY ) > .5 ){
-            desVoltage -= .1;
-            lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.1f", desVoltage );
+        if( joystick->GetRawAxis( JOY_AXIS_DX ) > .5 ){
+            desVoltage += 10;
+            lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.0f", desVoltage );
             Wait( .1 );
-        } else if( joystick->GetRawAxis( JOY_AXIS_DY ) < -.5 ){
-            desVoltage += .1;
-            lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.1f", desVoltage );
+        } else if( joystick->GetRawAxis( JOY_AXIS_DX ) < -.5 ){
+            desVoltage -= 10;
+            lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.0f", desVoltage );
             Wait( .1 );
         }
 
         // Raise / lower the defense pole
-        if( joystick->GetRawButton( JOY_BTN_A ) )
-            poleRaiser->Set( 1.0 );
-        else if( joystick->GetRawButton( JOY_BTN_Y ) )
-            poleRaiser->Set( -1.0 );
-        else if( poleRaiser->Get( ) != 0.0 )
-            poleRaiser->Set( 0.0 );
+        if( joystick->GetRawAxis( JOY_AXIS_DY ) != poleRaiser->Get( ) )
+            poleRaiser->Set( joystick->GetRawAxis( JOY_AXIS_DY ) );
+
+        //
+        if( joystick->GetRawButton( JOY_BTN_X ) ){
+            aqDeploy->Set( DoubleSolenoid::kReverse );
+            aqDeploy2->Set( DoubleSolenoid::kForward );
+        } else if( joystick->GetRawButton( JOY_BTN_B ) ){
+            aqDeploy2->Set( DoubleSolenoid::kReverse );
+            aqDeploy->Set( DoubleSolenoid::kForward );
+        } else if( joystick->GetRawButton( JOY_BTN_Y ) ){
+            aqDeploy->Set( DoubleSolenoid::kReverse );
+            aqDeploy2->Set( DoubleSolenoid::kReverse );
+        }
+
+        Wait( .01 );
     }
 }
 
@@ -179,13 +190,27 @@ void * inputFunc( void * arg ){
 *************************************************************************************/
 void * winchFunc( void * arg ){
 
-    while ( 1 ) {
-        lcd->PrintfLine( DriverStationLCD::kUser_Line1, "%.1f", ACDC->GetVoltage( ) );
+    bool winding;
 
-        // Turn motor on till we are at tension
-        if( joystick->GetRawButton( JOY_BTN_RBM ) ) // && hardstop->Get( ) != 1
-            filthyWench->Set( 1.0 );
-        else if( filthyWench->Get( ) > .5 )
+    while ( 1 ) {
+        lcd->PrintfLine( DriverStationLCD::kUser_Line1, "%.0f", ACDC->GetVoltage( ) * 100 );
+        lcd->PrintfLine( DriverStationLCD::kUser_Line3, limitSwitch->Get( ) ? "False" : "True" );
+        lcd->PrintfLine( DriverStationLCD::kUser_Line4, "%0.1f", rangeFinder->GetVoltage( )* 275.0 - .75);
+
+        // Turn motor on till we hit the limit switch
+        if( joystick->GetRawButton( JOY_BTN_RBM ) ){
+            if( limitSwitch->Get( ) )
+                winding = true;
+            else
+                filthyWench->Set( 1.0 );
+        } else if( winding ){
+            if( limitSwitch->Get( ) )
+                filthyWench->Set( 1.0 );
+            else{
+                filthyWench->Set( 0.0 );
+                winding = false;
+            }
+        } else
             filthyWench->Set( 0.0 );
 
         if( joystick->GetRawButton( JOY_BTN_RTG ) ){
@@ -196,6 +221,8 @@ void * winchFunc( void * arg ){
         }
 
         lcd->UpdateLCD( );
+
+        Wait( .01 );
     }
 }
 
