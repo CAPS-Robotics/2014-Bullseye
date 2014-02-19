@@ -1,7 +1,5 @@
-# THIS NEEDS A EDIT
-
-PROJECT_NAME           = 2013-BuckBeak
-PROJECT_BRIEF          = "Robot code for FRC Team 2410's cowtown robot BuckBeak"
+PROJECT_NAME           = 2014-Bullseye
+PROJECT_BRIEF          = "Robot code for FRC Team 2410's in-season robot, Bullseye"
 
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NUMBER         = 0.0.0
