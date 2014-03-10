@@ -1,6 +1,5 @@
 /*********************************************************************************//**
 * @file Robit.cpp
-* @author Jacob Hegna
 * Source file for the myRobit class and its thread functions
 *************************************************************************************/
 
@@ -12,7 +11,13 @@
 /*************************************************************************************
 * Global variable definitions
 *************************************************************************************/
-float                desVoltage = 290;      /**< Desired voltage on load cell       */
+float               desVoltage = 290;       /**< Desired voltage on load cell       */
+bool                driveRun = true;        /**< Whether drive should be running    */
+bool                winding = false;        /**< Keeps track of the state of the winch */
+int                 ballAqState = 0;        /**< Command to the ball aq thread motors */
+                                            /* 1 = Forwards, -1 = Reverse, 0 = DC   */
+int                 ballAqPistonState = 0;  /**< Command to the ball aq thread pistons */
+                                            /* 1 = Out, -1 = In, 0 = Neutral, 2 = DC */
 
 /*********************************************************************************//**
 * myRobit class constructor
@@ -62,6 +67,7 @@ void myRobit::RobotInit(){
     aqDeploy->Set( DoubleSolenoid::kReverse );
     aqDeploy2->Set( DoubleSolenoid::kReverse );
     lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.0f", desVoltage );
+    rDrive->SetSafetyEnabled( false );
     winchRelease->Set( DoubleSolenoid::kReverse );
 
     // Start all the threads
@@ -76,26 +82,52 @@ void myRobit::RobotInit(){
 * Runs once at start of autonomous period.
 *************************************************************************************/
 void myRobit::AutonomousInit(){
-    poleRaiser->Set( 1.f );
-    rDrive->MecanumDriveCartesian( 0.f, 0.8f, 0.f);
-    
-    // TODO: make a config variable
-    Wait( 1.5f );
+/*    driveRun = false;
+    Wait( .02 );
 
-    rDrive->MecanumDriveCartesian( 0.f, 0.f, 0.f );
+    rDrive->MecanumDrive_Cartesian( 0.0, -0.5, 0.0 );
+    Wait( 1.5 );
+    double poll = GetTime( );
 
-    /*
-     * offensive
-    rDrive->MecanumDriveCartesian( 0.f, 0.8f, 0.f );
-    Wait( 1.f );
-    rDrive->MecanumDriveCartesian( 0.f, 0.f, 0.f );
-    
-    // Fire piston
+    while( 1 ){
+        float volt = rangeFinder->GetVoltage( );
+        if( volt < 1.5 && volt > 1.2 ){
+            lcd->PrintfLine( DriverStationLCD::kUser_Line6, "Broke on reading %.3f", volt );
+            break;
+        } else if( GetTime( ) > poll + 5.0 ){
+            lcd->PrintfLine( DriverStationLCD::kUser_Line6, "Broke on timeout" );
+            break;
+        } else
+            rDrive->MecanumDrive_Cartesian( 0.0, -0.75, 0.0 );
+        Wait( .05 );
+    }
+    rDrive->MecanumDrive_Cartesian( 0.0, .2, 0.0 );
+    Wait( .5 );
+    rDrive->MecanumDrive_Cartesian( 0.0, 0.0, 0.0 );
+    Wait( 1.0 );*/
+
     winchRelease->Set( DoubleSolenoid::kForward );
     Wait( 2.5 );
-    //This resets the batman, but we don't want it for fear of robocop
-    //winchRelease->Set( DoubleSolenoid::kReverse );
-    */
+    winchRelease->Set( DoubleSolenoid::kReverse );
+
+    winding = true;
+    while( winding );
+
+    ballAqPistonState = -1;
+    Wait( .5 );
+
+    ballAqState = -1;
+    Wait( 3.5 );
+
+    ballAqPistonState = 1;
+    Wait( 2.0 );
+
+    ballAqPistonState = 0;
+
+    // Fire again
+//    winchRelease->Set( DoubleSolenoid::kForward );
+    Wait( 2.5 );
+    winchRelease->Set( DoubleSolenoid::kReverse );
 }
 
 /*********************************************************************************//**
@@ -106,6 +138,10 @@ void myRobit::AutonomousInit(){
 void myRobit::TeleopInit(){
     // Start the compressor
     compressor->Start( );
+
+    driveRun = true;
+    ballAqState = 0;
+    ballAqPistonState = 2;
 }
 
 /*********************************************************************************//**
@@ -150,7 +186,8 @@ void * driveFunc( void * arg ){
         ctime = GetTime();
 
         // Actually doo dat drive thang
-        rDrive->MecanumDrive_Cartesian(cX, cY, cZ);
+        if( driveRun )
+            rDrive->MecanumDrive_Cartesian(cX, cY, cZ);
 
         Wait( .01 );
     }
@@ -164,15 +201,15 @@ void * driveFunc( void * arg ){
 void * inputFunc( void * arg ){
 
     while ( 1 ){
-        // Run motors if button
-        if( joystick->GetRawButton( JOY_BTN_LTG ) )
+        // Run ball aq motors if buttons
+        if( joystick->GetRawButton( JOY_BTN_LTG ) || ballAqState == 1 )
             windInBall->Set( 1.0 );
-        else if( joystick->GetRawButton( JOY_BTN_LBM ) )
+        else if( joystick->GetRawButton( JOY_BTN_LBM ) || ballAqState == -1 )
             windInBall->Set( -1.0 );
         else if( windInBall->Get( ) != 0.0 )
             windInBall->Set( 0.0 );
 
-        // Edit desvoltage if buttons
+        // Edit reference tension value if buttons
         if( joystick->GetRawAxis( JOY_AXIS_DX ) > .5 ){
             desVoltage += 10;
             lcd->PrintfLine(DriverStationLCD::kUser_Line2, "%.0f", desVoltage );
@@ -187,18 +224,21 @@ void * inputFunc( void * arg ){
         if( joystick->GetRawAxis( JOY_AXIS_DY ) != poleRaiser->Get( ) )
             poleRaiser->Set( joystick->GetRawAxis( JOY_AXIS_DY ) );
 
-        //
-        if( joystick->GetRawButton( JOY_BTN_X ) ){
+        // Ball aq movement
+        // Supports out, in, and neutral ( no pressure )
+        if( joystick->GetRawButton( JOY_BTN_X || ballAqPistonState == 1 ) ){
             aqDeploy->Set( DoubleSolenoid::kReverse );
             aqDeploy2->Set( DoubleSolenoid::kForward );
-        } else if( joystick->GetRawButton( JOY_BTN_B ) ){
+        } else if( joystick->GetRawButton( JOY_BTN_B ) || ballAqPistonState == -1 ){
             aqDeploy2->Set( DoubleSolenoid::kReverse );
             aqDeploy->Set( DoubleSolenoid::kForward );
-        } else if( joystick->GetRawButton( JOY_BTN_Y ) ){
+        } else if( joystick->GetRawButton( JOY_BTN_Y ) || ballAqPistonState == 0 ){
             aqDeploy->Set( DoubleSolenoid::kReverse );
             aqDeploy2->Set( DoubleSolenoid::kReverse );
         }
 
+        // Just to make the field techs happy because the cRIO isnt running at 100 % CPU.
+        // I really REALLY hate having to do this in a real-time system
         Wait( .01 );
     }
 }
@@ -210,29 +250,66 @@ void * inputFunc( void * arg ){
 *************************************************************************************/
 void * winchFunc( void * arg ){
 
-    bool winding;
+    double pollTime = GetTime( );
+                            // Used for timing the distance polling
+    float maxvoltage;       // Used for smoothing out the
 
     while ( 1 ) {
+        // Write the tension, and the limit switch state the the DS
         lcd->PrintfLine( DriverStationLCD::kUser_Line1, "%.0f", ACDC->GetVoltage( ) * 100 );
         lcd->PrintfLine( DriverStationLCD::kUser_Line3, limitSwitch->Get( ) ? "False" : "True" );
-        lcd->PrintfLine( DriverStationLCD::kUser_Line4, "%0.1f", rangeFinder->GetVoltage( )* 275.0 - .75);
+
+        // Write the max voltage out in the last period, on a 10 Hz rate
+        //   Note: The sensor outputs continuously, we're just reading at a smaller freq
+        // CANDO: Moving average on range readings
+        //   NOTE: We had major issues with our sensor falling to small values unexpectedly
+        //     So to remove those, we print the highest reading found during each period
+        if( GetTime( ) > pollTime + .1 ){
+            // Output raw voltage reading, and scaled to inches
+            //   Note: The model was found experimentally with an R^2 value of .993
+            lcd->PrintfLine( DriverStationLCD::kUser_Line4, "%0.3f", maxvoltage );
+            lcd->PrintfLine( DriverStationLCD::kUser_Line5, "%0.1f", maxvoltage * 72.468 + 12.022 );
+
+            // Reset max, and time
+            maxvoltage = 0.0;
+            pollTime = GetTime( );
+        // Not ready for new period yet
+        } else {
+            // Update max if current reading is higher
+            float voltpoll = rangeFinder->GetVoltage( );
+            if( voltpoll > maxvoltage )
+                maxvoltage = voltpoll;
+        }
 
         // Turn motor on till we hit the limit switch
+        // This is set up to run Async from the rest of this thread
+        // Bumper starts it
         if( joystick->GetRawButton( JOY_BTN_RBM ) ){
+            // If not at tension ( active low )
             if( limitSwitch->Get( ) )
+                // Enable async winding
                 winding = true;
             else
+                // Support manual ovveride past limit switch if needed
                 filthyWench->Set( 1.0 );
+        // If button isn't pressed and we're winding
         } else if( winding ){
+            // If we are not at limit
             if( limitSwitch->Get( ) )
+                // Run the motor
                 filthyWench->Set( 1.0 );
+            // At limit
             else{
+                // Stop async, and turn motor off
                 filthyWench->Set( 0.0 );
                 winding = false;
             }
+        // Otherwise we're done
         } else
+            // Can maybe run this only if not already at 0.0
             filthyWench->Set( 0.0 );
 
+        // If the fire button pressed, fire and reset the catapult
         if( joystick->GetRawButton( JOY_BTN_RTG ) ){
             // Fire piston
             winchRelease->Set( DoubleSolenoid::kForward );
@@ -240,8 +317,11 @@ void * winchFunc( void * arg ){
             winchRelease->Set( DoubleSolenoid::kReverse );
         }
 
+        // Push all new LCD messages to the DS
         lcd->UpdateLCD( );
 
+        // Just to make the field techs happy because the cRIO isnt running at 100 % CPU.
+        // I really REALLY hate having to do this in a real-time system
         Wait( .01 );
     }
 }
