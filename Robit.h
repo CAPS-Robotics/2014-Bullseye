@@ -12,6 +12,7 @@
 
 #include "JoystickButtons.h"
 
+#include "fstream.h"
 #include "math.h"
 #include <pthread.h>
 
@@ -28,11 +29,12 @@
 #define DEAD_ZONE           0.2             /**< Dead zone on the Joystick          */
 
 // Compressor things
-#define COMPRESSOR_PORT		1				/**< Compressor relay port				*/
+#define COMPRESSOR_PORT     1               /**< Compressor relay port				*/
 #define PRESSURE_SWITCH     1               /**< Pressure switch DIO port           */
 
 // Winch stuffs
-#define LOADCELL_CHANNEL    1               /**< Loadcell analog channel            */
+#define LOADCELL_CHANNEL    5               /**< Loadcell analog channel            */
+// THIS IS 1 ON THE COMP BOT, BUT THE TEST BOT NEEDED 5
 #define RANGE_SENSOR        2               /**< Range sensor analog channel        */
 #define SWITCH_PORT         6               /**< Limit Switch digital port          */
 #define WINCH_PORT          5               /**< Winch talon                        */
@@ -93,6 +95,8 @@ DoubleSolenoid *            winchRelease;   /**< Release piston for the winch   
 Talon *                     windInBall;     /**< Talon on the ball aq system        */
 
 extern float                desVoltage;     /**< Desired voltage on load cell       */
+
+extern bool                 driveRun;       /**< Whether or not drive should be running */
 
 /*************************************************************************************
 * Actuator thread functions
