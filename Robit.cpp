@@ -82,50 +82,23 @@ void myRobit::RobotInit(){
 * Runs once at start of autonomous period.
 *************************************************************************************/
 void myRobit::AutonomousInit(){
-/*    driveRun = false;
+    driveRun = false;
     Wait( .02 );
 
-    rDrive->MecanumDrive_Cartesian( 0.0, -0.5, 0.0 );
-    Wait( 1.5 );
-    double poll = GetTime( );
+    // Drop the lightsaber
+    poleRaiser->Set(DoubleSolenoid::kForward);
 
-    while( 1 ){
-        float volt = rangeFinder->GetVoltage( );
-        if( volt < 1.5 && volt > 1.2 ){
-            lcd->PrintfLine( DriverStationLCD::kUser_Line6, "Broke on reading %.3f", volt );
-            break;
-        } else if( GetTime( ) > poll + 5.0 ){
-            lcd->PrintfLine( DriverStationLCD::kUser_Line6, "Broke on timeout" );
-            break;
-        } else
-            rDrive->MecanumDrive_Cartesian( 0.0, -0.75, 0.0 );
-        Wait( .05 );
-    }
-    rDrive->MecanumDrive_Cartesian( 0.0, .2, 0.0 );
-    Wait( .5 );
-    rDrive->MecanumDrive_Cartesian( 0.0, 0.0, 0.0 );
-    Wait( 1.0 );*/
+    // Cock the catapult
 
+    // Move into position
+    rDrive->MecanumDrive_Cartesian(0, 1, 0);
+    Wait( 0.5 );
+    rDrive->MecanumDrive_Cartesian(0, .5, 0);
+    Wait( 0.5 );
+    rDrive->MecanumDrive_Cartesian(0, 0, 0);
+
+    // fire
     winchRelease->Set( DoubleSolenoid::kForward );
-    Wait( 2.5 );
-    winchRelease->Set( DoubleSolenoid::kReverse );
-
-    winding = true;
-    while( winding );
-
-    ballAqPistonState = -1;
-    Wait( .5 );
-
-    ballAqState = -1;
-    Wait( 3.5 );
-
-    ballAqPistonState = 1;
-    Wait( 2.0 );
-
-    ballAqPistonState = 0;
-
-    // Fire again
-//    winchRelease->Set( DoubleSolenoid::kForward );
     Wait( 2.5 );
     winchRelease->Set( DoubleSolenoid::kReverse );
 }
